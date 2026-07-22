@@ -5,7 +5,7 @@ Personal dotfiles for macOS and Debian.
 ## Install
 
 ```bash
-/bin/bash -c "$(curl -fsSL "https://raw.githubusercontent.com/MarlinL/config/master/setup.sh?$(date +%s)")"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/MarlinL/config/master/setup.sh)"
 ```
 
 The repository is cloned to `~/.config` through SSH. GitHub SSH access is required.
@@ -19,7 +19,7 @@ The repository is cloned to `~/.config` through SSH. GitHub SSH access is requir
 ## Dry run
 
 ```bash
-/bin/bash -c "$(curl -fsSL "https://raw.githubusercontent.com/MarlinL/config/master/setup.sh?$(date +%s)")" --dry-run
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/MarlinL/config/master/setup.sh)" --dry-run
 ```
 
 ## Zsh render test

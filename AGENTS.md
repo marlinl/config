@@ -51,6 +51,7 @@ The generated `~/.zshrc` has exactly three visible blocks, in this fixed order:
 ## Secrets and version control
 
 - This is a whitelist repository. `.gitignore` ignores everything by default and permits only `.gitignore`, `.vimrc`, `AGENTS.md`, `README.md`, `setup.sh`, `macos.txt`, `debian.txt`, `zsh/`, `zsh-plugin/`, and `ghostty/`. Do not widen that set without explicit user approval.
+- After the initial `init` commit, use ordinary additive commits for later changes. Amend, squash, or rewrite history only when the user explicitly requests it.
 - Never add, repeat, stage, commit, log, or copy access tokens, private keys, cloud credentials, proxy credentials, or other real secrets.
 - Treat `glm-acp-agent/`, `vcd/`, and comparable machine-local state as sensitive. `fish/`, `uv/`, `vcd/`, and `glm-acp-agent/` are local-only and must remain ignored. Verify ignore behavior with `git check-ignore` when changing related files.
 - If a plaintext credential already exists, report its file scope without reproducing the value and recommend rotation. Do not duplicate it into a new configuration path without explicit user direction.
