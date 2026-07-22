@@ -1,0 +1,6 @@
+git
+zsh
+zsh-autosuggestions
+zsh-syntax-highlighting
+rsync
+curl

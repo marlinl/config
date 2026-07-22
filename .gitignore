@@ -1,0 +1,29 @@
+# Keep this dotfiles repository opt-in: ignore everything unless explicitly
+# listed below.
+*
+
+# Root configuration and repository documentation.
+!/.gitignore
+!/.vimrc
+!/AGENTS.md
+!/README.md
+!/setup.sh
+!/macos.txt
+!/debian.txt
+
+# Versioned configuration trees.
+!/zsh/
+!/zsh/**
+!/zsh-plugin/
+!/zsh-plugin/**
+!/ghostty/
+!/ghostty/**
+
+# Local/generated files may exist inside an allowed tree.
+**/.DS_Store
+**/*.log
+**/*.bak
+**/*.swp
+**/*.tmp
+**/*~
+zsh/weave/.status

@@ -1,0 +1,11 @@
+font-family = "JetBrains Mono"
+font-family = "PingFang SC"
+
+font-size = 14
+adjust-cell-height = 6%
+background = 282c34
+foreground = ffffff
+
+keybind = super+left=text:\x01
+keybind = super+right=text:\x05
+

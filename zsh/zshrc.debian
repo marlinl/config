@@ -1,0 +1,15 @@
+# 系统补全路径
+fpath=(/usr/share/zsh/vendor-completions /usr/share/zsh/functions $fpath)
+
+# 插件
+source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# alias
+alias ll='ls -Al'
+
+# 变量
+var OS_ICON "🍥"
+
+# acme
+. "/home/marlinl/.acme.sh/acme.sh.env"

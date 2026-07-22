@@ -1,0 +1,14 @@
+[Unit]
+Description=Synchronize generated ~/.zshrc with ~/.config/zsh blocks
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/bin/zsh -f %h/.config/zsh/weave/zshrc-weave.zsh daemon auto
+Restart=always
+RestartSec=1
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=default.target

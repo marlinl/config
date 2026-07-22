@@ -1,0 +1,29 @@
+# Homebrew 补全路径
+fpath=(/opt/homebrew/share/zsh/site-functions /opt/homebrew/share/zsh/functions $fpath)
+
+# 插件
+source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# 变量
+var HOMEBREW_OPT '/opt/homebrew/opt'
+var HOMEBREW_NO_AUTO_UPDATE 1
+var OS_ICON "%F{white}%f"
+var -f JAVA_HOME default_java_home
+
+# 别名
+alias ll='ls -Al'
+alias psql="$HOMEBREW_OPT/libpq/bin/psql"
+alias pg_dump="$HOMEBREW_OPT/libpq/bin/pg_dump"
+alias vscode='code .'
+
+
+# 目录快捷跳转
+hash -d icloud_dir="$HOME/Library/Mobile Documents/com~apple~CloudDocs/"
+
+
+
+. "$HOME/.local/bin/env"
+
+# Hermes Agent — ensure ~/.local/bin is on PATH
+export PATH="$HOME/.local/bin:$PATH"

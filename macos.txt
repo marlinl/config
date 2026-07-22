@@ -1,0 +1,11 @@
+git
+bash
+zsh
+zsh-autosuggestions
+zsh-syntax-highlighting
+rsync
+libpq
+font-jetbrains-mono --cask
+ghostty --cask
+google-chrome --cask
+visual-studio-code --cask

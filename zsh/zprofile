@@ -1,0 +1,20 @@
+# ==========================================
+# 系统检测与路径设置
+# ==========================================
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS: Homebrew 路径
+    export PATH="/opt/homebrew/bin:$PATH"
+    source ~/.orbstack/shell/init.zsh 2>/dev/null || :
+fi
+
+# Default env
+export LANG=zh_CN.UTF-8
+export LC_ALL=zh_CN.UTF-8
+export LANGUAGE=zh_CN.UTF-8
+export LC_TIME=zh_CN.UTF-8
+export LC_CTYPE=zh_CN.UTF-8
+export TZ=Asia/Shanghai
+
+
+# Hermes Agent — ensure ~/.local/bin is on PATH
+export PATH="$HOME/.local/bin:$PATH"
