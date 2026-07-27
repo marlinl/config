@@ -19,7 +19,7 @@ Usage:
   ./setup.sh --test <directory>
 
 Without arguments, install the platform dependencies, render ~/.zshrc, create
-the standard ~/.zprofile and ~/.vimrc links, and enable zshrc-weave.
+the standard ~/.zprofile and ~/.vimrc links, and enable and verify zshrc-weave.
 
 --dry-run prints the selected installation plan without changing
 the filesystem, installing packages, changing Git settings, or enabling a
@@ -88,10 +88,12 @@ render_zshrc() {
     local platform="$1"
     local output_file="$2"
     local adopt="${3:-0}"
+    local recover="${4:-1}"
 
     ZSH_WEAVE_CONFIG_DIR="$CONFIG_DIR/zsh" \
     ZSH_WEAVE_OUTPUT_FILE="$output_file" \
     ZSH_WEAVE_ADOPT="$adopt" \
+    ZSH_WEAVE_RECOVER="$recover" \
     zsh -f "$WEAVE_SCRIPT" render "$platform"
 
     zsh -n "$output_file"
@@ -117,7 +119,7 @@ run_test() {
 
     require_weave
     output_file="$target_dir/.zshrc"
-    render_zshrc "$platform" "$output_file" "$adopt"
+    render_zshrc "$platform" "$output_file" "$adopt" 0
 
     printf '✅ 测试输出已生成: %s\n' "$output_file"
     printf '   未安装依赖、未创建符号链接、未修改线上配置、未启用服务；状态仅写入 ~/.config/zsh/weave/.status。\n'
@@ -272,6 +274,8 @@ install_macos_service() {
 
     launchctl bootout "gui/$UID/com.marlinl.zshrc-weave" 2>/dev/null || true
     launchctl bootstrap "gui/$UID" "$agent_file"
+    launchctl print "gui/$UID/com.marlinl.zshrc-weave" >/dev/null 2>&1 \
+        || die 'zshrc-weave LaunchAgent was not registered'
 }
 
 install_debian_service() {
@@ -290,6 +294,10 @@ install_debian_service() {
     cp "$CONFIG_DIR/zsh/weave/zshrc-weave.service" "$unit_file"
     systemctl --user daemon-reload
     systemctl --user enable --now zshrc-weave.service
+    systemctl --user is-enabled --quiet zshrc-weave.service \
+        || die 'zshrc-weave systemd user service was not enabled'
+    systemctl --user is-active --quiet zshrc-weave.service \
+        || die 'zshrc-weave systemd user service is not active'
 }
 
 plan_install() {
@@ -307,9 +315,9 @@ plan_install() {
     printf '[dry-run] render ~/.zshrc from zsh/before.zshrc, zsh/zshrc.%s, and zsh/after.zshrc\n' "$platform"
 
     if [[ "$platform" == macos ]]; then
-        printf '[dry-run] install and bootstrap ~/Library/LaunchAgents/com.marlinl.zshrc-weave.plist (prompt before replacing an existing file)\n'
+        printf '[dry-run] install, bootstrap, and verify ~/Library/LaunchAgents/com.marlinl.zshrc-weave.plist (prompt before replacing an existing file)\n'
     else
-        printf '[dry-run] install, daemon-reload, and enable ~/.config/systemd/user/zshrc-weave.service (prompt before replacing an existing file)\n'
+        printf '[dry-run] install, daemon-reload, enable, and verify ~/.config/systemd/user/zshrc-weave.service (prompt before replacing an existing file)\n'
     fi
     printf '[dry-run] complete a missing global Git identity and configure defaults when user.name is unset\n'
 }

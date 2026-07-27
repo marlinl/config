@@ -27,3 +27,4 @@
 **/*.tmp
 **/*~
 zsh/weave/.status
+zsh/weave/.sync-transaction*
