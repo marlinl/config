@@ -8,7 +8,7 @@ Personal dotfiles for macOS and Debian.
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/MarlinL/config/master/setup.sh)"
 ```
 
-The repository is cloned to `~/.config` through SSH. GitHub SSH access is required.
+The repository is cloned to `~/.config` through SSH when that directory is missing or empty. GitHub SSH access is required. A non-empty `~/.config` is reused only when its `origin` matches this repository; otherwise setup refuses to touch it.
 
 ## Existing checkout
 

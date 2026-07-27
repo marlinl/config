@@ -70,6 +70,15 @@ is_config_checkout() {
     [[ -r "$CONFIG_DIR/setup.sh" && -r "$WEAVE_SCRIPT" ]]
 }
 
+is_config_target_checkout() {
+    local remote_url
+
+    [[ -d "$CONFIG_TARGET_DIR/.git" && -r "$CONFIG_TARGET_DIR/setup.sh" && -r "$CONFIG_TARGET_DIR/zsh/weave/zshrc-weave.zsh" ]] || return 1
+    command -v git >/dev/null 2>&1 || return 1
+    remote_url="$(git -C "$CONFIG_TARGET_DIR" config --get remote.origin.url 2>/dev/null || true)"
+    [[ "$remote_url" == "$REPO_SSH_URL" ]]
+}
+
 require_weave() {
     [[ -r "$WEAVE_SCRIPT" ]] || die "missing zshrc-weave script: $WEAVE_SCRIPT"
     command -v zsh >/dev/null 2>&1 || die 'zsh is required before rendering .zshrc'
@@ -302,7 +311,7 @@ plan_install() {
     else
         printf '[dry-run] install, daemon-reload, and enable ~/.config/systemd/user/zshrc-weave.service (prompt before replacing an existing file)\n'
     fi
-    printf '[dry-run] configure global Git identity and defaults only when user.name is unset\n'
+    printf '[dry-run] complete a missing global Git identity and configure defaults when user.name is unset\n'
 }
 
 ensure_git_for_clone() {
@@ -338,7 +347,7 @@ clone_and_install() {
         die "config target is not a directory: $CONFIG_TARGET_DIR"
     fi
 
-    if [[ -d "$CONFIG_TARGET_DIR/.git" && -r "$child_setup" ]]; then
+    if is_config_target_checkout; then
         if (( DRY_RUN )); then
             printf '[dry-run] reuse existing checkout: %s\n' "$CONFIG_TARGET_DIR"
             exec /usr/bin/env bash "$child_setup" --dry-run
@@ -363,18 +372,24 @@ clone_and_install() {
 }
 
 init_git_info() {
-    if [[ -n "$(git config --global user.name)" ]]; then
-        return 0
+    local git_name git_email configure_defaults=0
+    git_name="$(git config --global --get user.name 2>/dev/null || true)"
+    git_email="$(git config --global --get user.email 2>/dev/null || true)"
+
+    if [[ -z "$git_name" ]]; then
+        read -r -p '请输入 Git 用户名 [默认: MarlinL]: ' git_name
+        git_name="${git_name:-MarlinL}"
+        git config --global user.name "$git_name"
+        configure_defaults=1
     fi
 
-    local git_name git_email
-    read -r -p '请输入 Git 用户名 [默认: MarlinL]: ' git_name
-    git_name="${git_name:-MarlinL}"
-    read -r -p '请输入 Git 邮箱: ' git_email
-    [[ -n "$git_email" ]] || die 'Git 邮箱不能为空'
+    if [[ -z "$git_email" ]]; then
+        read -r -p '请输入 Git 邮箱: ' git_email
+        [[ -n "$git_email" ]] || die 'Git 邮箱不能为空'
+        git config --global user.email "$git_email"
+    fi
 
-    git config --global user.name "$git_name"
-    git config --global user.email "$git_email"
+    (( configure_defaults )) || return 0
     git config --global init.defaultBranch master
     git config --global core.quotepath false
     git config --global core.autocrlf input

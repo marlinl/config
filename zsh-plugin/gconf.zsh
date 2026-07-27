@@ -16,7 +16,11 @@ gconf() {
     echo "🔄 开始检测 ~/.config 的变更..."
 
     # 添加所有变动
-    git add .
+    if ! git add .; then
+        echo "❌ 暂存失败，未提交或推送任何变更。"
+        cd "$current_dir"
+        return 1
+    fi
 
     # 检查是否有实际的修改需要提交
     if git diff --staged --quiet; then
@@ -26,10 +30,18 @@ gconf() {
         # 如果没带参数，默认使用当前时间戳
         local commit_msg="${1:-Auto commit: $(date '+%Y-%m-%d %H:%M:%S')}"
         
-        git commit -m "$commit_msg"
+        if ! git commit -m "$commit_msg"; then
+            echo "❌ 提交失败，未推送任何变更。"
+            cd "$current_dir"
+            return 1
+        fi
         
         # 推送到默认的主分支 master
-        git push origin master
+        if ! git push origin master; then
+            echo "❌ 推送失败，本地提交仍保留。"
+            cd "$current_dir"
+            return 1
+        fi
         
         echo "🚀 同步远端完成！"
     fi

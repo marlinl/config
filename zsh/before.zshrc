@@ -4,3 +4,5 @@ echo "Keep simple. Keep stupid. Keep hungry."
 autoload -Uz compinit && compinit
 # 自动加载所有插件
 for f in ~/.config/zsh-plugin/*.zsh(N); do source "$f"; done
+
+load_config_env "$HOME/.config/.env"
