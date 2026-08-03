@@ -26,6 +26,9 @@ and change the login shell to zsh when needed.
 the filesystem, installing packages, changing Git settings, or enabling a
 service or changing the login shell.
 
+When the normal setup is run again, it checks the existing configuration
+first and skips installation when every check passes.
+
 --test writes a standalone .zshrc into <directory> and the fixed, ignored
 ~/.config/zsh/weave/.status file. It does not install packages, create links,
 configure Git, enable a service, or change the login shell.
@@ -322,6 +325,7 @@ plan_install() {
     fi
     printf '[dry-run] complete a missing global Git identity and configure defaults when user.name is unset\n'
     printf '[dry-run] keep the login shell when it is already zsh; otherwise change it to an accepted zsh path with chsh -s\n'
+    printf '[dry-run] on a normal rerun, check the existing packages, links, ~/.zshrc, service, Git identity, and login shell before making changes\n'
 }
 
 ensure_git_for_clone() {
@@ -424,6 +428,181 @@ get_configured_login_shell() {
     printf '%s\n' "$login_shell"
 }
 
+CHECK_FAILED=0
+
+check_failure() {
+    printf 'setup: 配置检查失败: %s\n' "$*" >&2
+    CHECK_FAILED=1
+}
+
+check_macos_packages() {
+    [[ -r "$MACOS_PACKAGES_FILE" ]] || {
+        check_failure "missing package list: $MACOS_PACKAGES_FILE"
+        return 0
+    }
+    if ! command -v brew >/dev/null 2>&1; then
+        check_failure 'Homebrew is not installed'
+        return 0
+    fi
+
+    local line package install_mode extra
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -n "$line" ]] || continue
+        IFS=$' \t' read -r package install_mode extra <<< "$line"
+        if [[ -n "$extra" ]]; then
+            check_failure "invalid package entry in $MACOS_PACKAGES_FILE: $line"
+            continue
+        fi
+        case "$install_mode" in
+            '')
+                brew ls --versions "$package" >/dev/null 2>&1 \
+                    || check_failure "Homebrew formula is not installed: $package"
+                ;;
+            --cask)
+                brew ls --cask --versions "$package" >/dev/null 2>&1 \
+                    || check_failure "Homebrew cask is not installed: $package"
+                ;;
+            *)
+                check_failure "invalid package entry in $MACOS_PACKAGES_FILE: $line"
+                ;;
+        esac
+    done < "$MACOS_PACKAGES_FILE"
+}
+
+check_debian_packages() {
+    [[ -r "$DEBIAN_PACKAGES_FILE" ]] || {
+        check_failure "missing package list: $DEBIAN_PACKAGES_FILE"
+        return 0
+    }
+    if ! command -v dpkg-query >/dev/null 2>&1; then
+        check_failure 'dpkg-query is not installed'
+        return 0
+    fi
+
+    local package status
+    while IFS= read -r package || [[ -n "$package" ]]; do
+        [[ -n "$package" ]] || continue
+        status="$(dpkg-query -W -f='${Status}' "$package" 2>/dev/null || true)"
+        [[ "$status" == 'install ok installed' ]] \
+            || check_failure "Debian package is not installed: $package"
+    done < "$DEBIAN_PACKAGES_FILE"
+}
+
+check_links() {
+    local source_file target_file
+    source_file="$CONFIG_DIR/zsh/zprofile"
+    target_file="$HOME/.zprofile"
+    if [[ ! -L "$target_file" || "$(readlink "$target_file" 2>/dev/null || true)" != "$source_file" ]]; then
+        check_failure "~/.zprofile is not linked to $source_file"
+    fi
+
+    source_file="$CONFIG_DIR/.vimrc"
+    target_file="$HOME/.vimrc"
+    if [[ ! -L "$target_file" || "$(readlink "$target_file" 2>/dev/null || true)" != "$source_file" ]]; then
+        check_failure "~/.vimrc is not linked to $source_file"
+    fi
+}
+
+check_zshrc() {
+    local output_file="$HOME/.zshrc"
+    local expected_markers actual_markers
+
+    if [[ ! -f "$output_file" ]]; then
+        check_failure 'missing ~/.zshrc'
+        return 0
+    fi
+    if ! zsh -n "$output_file" >/dev/null 2>&1; then
+        check_failure '~/.zshrc failed zsh syntax validation'
+    fi
+
+    expected_markers="$(printf '%s\n' \
+        '# ===== BEGIN zsh/before.zshrc =====' \
+        '# ===== END zsh/before.zshrc =====' \
+        "# ===== BEGIN zsh/zshrc.$1 =====" \
+        "# ===== END zsh/zshrc.$1 =====" \
+        '# ===== BEGIN zsh/after.zshrc =====' \
+        '# ===== END zsh/after.zshrc =====')"
+    actual_markers="$(grep -E '^# ===== (BEGIN|END) zsh/' "$output_file" 2>/dev/null || true)"
+    [[ "$actual_markers" == "$expected_markers" ]] \
+        || check_failure '~/.zshrc does not contain exactly the three expected blocks in order'
+}
+
+check_service() {
+    local platform="$1"
+    if [[ "$platform" == macos ]]; then
+        local template="$CONFIG_DIR/zsh/weave/com.marlinl.zshrc-weave.plist"
+        local agent_file="$HOME/Library/LaunchAgents/com.marlinl.zshrc-weave.plist"
+        [[ -f "$agent_file" ]] \
+            || check_failure "missing LaunchAgent file: $agent_file"
+        if [[ ! -r "$template" ]] \
+            || ! diff -q <(sed "s|__HOME__|$HOME|g" "$template") "$agent_file" >/dev/null 2>&1; then
+            check_failure 'LaunchAgent file does not match its repository template'
+        fi
+        if ! command -v launchctl >/dev/null 2>&1 \
+            || ! launchctl print "gui/$UID/com.marlinl.zshrc-weave" >/dev/null 2>&1; then
+            check_failure 'zshrc-weave LaunchAgent is not registered'
+        fi
+    else
+        local template="$CONFIG_DIR/zsh/weave/zshrc-weave.service"
+        local unit_file="$HOME/.config/systemd/user/zshrc-weave.service"
+        [[ -f "$unit_file" ]] \
+            || check_failure "missing systemd user service file: $unit_file"
+        if [[ ! -r "$template" ]] || ! cmp -s "$template" "$unit_file"; then
+            check_failure 'systemd user service file does not match its repository template'
+        fi
+        if ! command -v systemctl >/dev/null 2>&1 \
+            || ! systemctl --user is-enabled --quiet zshrc-weave.service; then
+            check_failure 'zshrc-weave systemd user service is not enabled'
+        fi
+        if ! command -v systemctl >/dev/null 2>&1 \
+            || ! systemctl --user is-active --quiet zshrc-weave.service; then
+            check_failure 'zshrc-weave systemd user service is not active'
+        fi
+    fi
+}
+
+check_git_identity() {
+    local git_name git_email
+    if ! command -v git >/dev/null 2>&1; then
+        check_failure 'git is not installed'
+        return 0
+    fi
+    git_name="$(git config --global --get user.name 2>/dev/null || true)"
+    git_email="$(git config --global --get user.email 2>/dev/null || true)"
+    [[ -n "$git_name" ]] || check_failure 'global Git user.name is not configured'
+    [[ -n "$git_email" ]] || check_failure 'global Git user.email is not configured'
+}
+
+check_login_shell() {
+    local platform="$1"
+    local login_shell
+    login_shell="$(get_configured_login_shell "$platform" || true)"
+    login_shell="${login_shell:-${SHELL:-}}"
+    [[ "${login_shell##*/}" == zsh ]] \
+        || check_failure "login shell is not zsh: ${login_shell:-unknown}"
+}
+
+check_installation() {
+    local platform="$1"
+
+    CHECK_FAILED=0
+    [[ -r "$WEAVE_SCRIPT" ]] || check_failure "missing zshrc-weave script: $WEAVE_SCRIPT"
+    command -v zsh >/dev/null 2>&1 || check_failure 'zsh is not installed'
+    if [[ "$platform" == macos ]]; then
+        check_macos_packages
+    else
+        check_debian_packages
+    fi
+    check_links
+    if command -v zsh >/dev/null 2>&1; then
+        check_zshrc "$platform"
+    fi
+    check_service "$platform"
+    check_git_identity
+    check_login_shell "$platform"
+    (( CHECK_FAILED == 0 ))
+}
+
 find_zsh_login_shell() {
     local shell_path
 
@@ -467,6 +646,12 @@ run_install() {
         plan_install "$platform"
         return 0
     fi
+
+    if check_installation "$platform"; then
+        printf '✅ 当前配置检查通过，跳过重复安装。\n'
+        return 0
+    fi
+    printf '检测到配置不完整，开始执行安装和修复流程...\n'
 
     if [[ "$platform" == macos ]]; then
         install_macos_packages
