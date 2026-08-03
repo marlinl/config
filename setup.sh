@@ -19,15 +19,16 @@ Usage:
   ./setup.sh --test <directory>
 
 Without arguments, install the platform dependencies, render ~/.zshrc, create
-the standard ~/.zprofile and ~/.vimrc links, and enable and verify zshrc-weave.
+the standard ~/.zprofile and ~/.vimrc links, enable and verify zshrc-weave,
+and change the login shell to zsh when needed.
 
 --dry-run prints the selected installation plan without changing
 the filesystem, installing packages, changing Git settings, or enabling a
-service.
+service or changing the login shell.
 
 --test writes a standalone .zshrc into <directory> and the fixed, ignored
 ~/.config/zsh/weave/.status file. It does not install packages, create links,
-configure Git, or enable a service.
+configure Git, enable a service, or change the login shell.
 EOF
 }
 
@@ -320,6 +321,7 @@ plan_install() {
         printf '[dry-run] install, daemon-reload, enable, and verify ~/.config/systemd/user/zshrc-weave.service (prompt before replacing an existing file)\n'
     fi
     printf '[dry-run] complete a missing global Git identity and configure defaults when user.name is unset\n'
+    printf '[dry-run] keep the login shell when it is already zsh; otherwise change it to an accepted zsh path with chsh -s\n'
 }
 
 ensure_git_for_clone() {
@@ -405,6 +407,59 @@ init_git_info() {
     git config --global core.fsmonitor true
 }
 
+get_configured_login_shell() {
+    local platform="$1"
+    local account_name account_record login_shell
+
+    account_name="$(id -un)" || return 1
+    if [[ "$platform" == macos ]]; then
+        account_record="$(id -P "$account_name" 2>/dev/null || true)"
+    else
+        account_record="$(getent passwd "$account_name" 2>/dev/null || true)"
+    fi
+
+    [[ -n "$account_record" ]] || return 1
+    login_shell="${account_record##*:}"
+    [[ -n "$login_shell" ]] || return 1
+    printf '%s\n' "$login_shell"
+}
+
+find_zsh_login_shell() {
+    local shell_path
+
+    if [[ -r /etc/shells ]]; then
+        while IFS= read -r shell_path || [[ -n "$shell_path" ]]; do
+            [[ "$shell_path" == /* && "${shell_path##*/}" == zsh && -x "$shell_path" ]] || continue
+            printf '%s\n' "$shell_path"
+            return 0
+        done < /etc/shells
+    fi
+
+    shell_path="$(command -v zsh 2>/dev/null || true)"
+    [[ -n "$shell_path" ]] || return 1
+    printf '%s\n' "$shell_path"
+}
+
+ensure_zsh_login_shell() {
+    local platform="$1"
+    local current_shell zsh_shell updated_shell
+
+    current_shell="$(get_configured_login_shell "$platform" || true)"
+    current_shell="${current_shell:-${SHELL:-}}"
+    [[ "${current_shell##*/}" == zsh ]] && return 0
+
+    zsh_shell="$(find_zsh_login_shell)" || die 'cannot find an installed zsh for the login shell'
+    command -v chsh >/dev/null 2>&1 || die 'chsh is required to change the login shell'
+
+    printf '🐚 当前登录 shell 不是 zsh，正在切换为 %s...\n' "$zsh_shell"
+    chsh -s "$zsh_shell"
+
+    updated_shell="$(get_configured_login_shell "$platform" || true)"
+    if [[ -n "$updated_shell" && "${updated_shell##*/}" != zsh ]]; then
+        die "login shell is still not zsh after chsh: $updated_shell"
+    fi
+}
+
 run_install() {
     local platform="$1"
 
@@ -431,6 +486,7 @@ run_install() {
     fi
 
     init_git_info
+    ensure_zsh_login_shell "$platform"
     printf '✅ 初始化完成。请重新打开终端以加载新的 ~/.zshrc。\n'
 }
 

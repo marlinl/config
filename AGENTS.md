@@ -4,9 +4,9 @@
 
 This is a personal, cross-platform dotfiles repository for macOS and Debian. It is not an application service.
 
-- `setup.sh` is the only bootstrap entry point. When executed outside a checkout, it clones `git@github.com:marlinl/config.git` over SSH into a missing or empty `~/.config` and then runs the cloned script. It may reuse a non-empty target only when that target's `origin` matches the configured repository URL; otherwise it must refuse it. In normal mode it may install packages, change global Git settings, create `~/.zprofile` and `~/.vimrc` links, generate `~/.zshrc`, and enable the user-level `zshrc-weave` service.
-- `./setup.sh --dry-run` and the remote `bash -c` invocation with `--dry-run` must print their plans without cloning, installing packages, changing files, changing Git configuration, or enabling services.
-- `./setup.sh --test <directory>` is the safe rendering path. It writes `<directory>/.zshrc` plus only the fixed, ignored `~/.config/zsh/weave/.status` file; it must not install packages, create links below `~`, change Git configuration, or enable services.
+- `setup.sh` is the only bootstrap entry point. When executed outside a checkout, it clones `git@github.com:marlinl/config.git` over SSH into a missing or empty `~/.config` and then runs the cloned script. It may reuse a non-empty target only when that target's `origin` matches the configured repository URL; otherwise it must refuse it. In normal mode it may install packages, change global Git settings, create `~/.zprofile` and `~/.vimrc` links, generate `~/.zshrc`, enable the user-level `zshrc-weave` service, and change the login shell to zsh when needed.
+- `./setup.sh --dry-run` and the remote `bash -c` invocation with `--dry-run` must print their plans without cloning, installing packages, changing files, changing Git configuration, enabling services, or changing the login shell.
+- `./setup.sh --test <directory>` is the safe rendering path. It writes `<directory>/.zshrc` plus only the fixed, ignored `~/.config/zsh/weave/.status` file; it must not install packages, create links below `~`, change Git configuration, enable services, or change the login shell.
 - The user owns all pre-existing modifications and untracked files. Start with `git status --short`; do not modify, stage, move, or delete unrelated work.
 - `vcd/` is local container-development configuration. `vcd/plugins/superpowers/` is an independent plugin copy: do not bulk format, upgrade dependencies, or treat it as root configuration unless the task explicitly targets it.
 

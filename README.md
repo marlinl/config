@@ -36,4 +36,4 @@ The repository is cloned to `~/.config` through SSH when that directory is missi
 
 ## Workflow
 
-`setup.sh` installs platform packages, links `~/.zprofile`, generates `~/.zshrc`, installs the current platform's weave service, and verifies it with the platform service manager. Weave combines the fixed Zsh blocks and writes edits from `~/.zshrc` back to their source blocks through a recoverable transaction.
+`setup.sh` installs platform packages, links `~/.zprofile`, generates `~/.zshrc`, installs and verifies the current platform's weave service, and changes the login shell to zsh when needed. Weave combines the fixed Zsh blocks and writes edits from `~/.zshrc` back to their source blocks through a recoverable transaction.
