@@ -33,6 +33,7 @@ The generated `~/.zshrc` has exactly three visible blocks, in this fixed order:
 - `zsh-plugin/git-info.zsh` provides `git_branch()` for the prompt.
 - `zsh-plugin/proxy.zsh` owns the terminal proxy helpers.
 - `zsh-plugin/gconf.zsh` runs `git add .` and pushes `origin master`. Do not use it in automated work or as a substitute for explicit staging and user-approved commits.
+- `zsh-plugin/codex-auth.zsh` manages local Codex account files in the ignored `codex/` directory and switches the `CODEX_HOME/auth.json` symlink. Do not log, stage, or inspect credential contents; an account switch stops the matching app-server process.
 
 ## Platform boundaries
 
@@ -55,6 +56,7 @@ The generated `~/.zshrc` has exactly three visible blocks, in this fixed order:
 - After the initial `init` commit, use ordinary additive commits for later changes. Amend, squash, or rewrite history only when the user explicitly requests it.
 - Never add, repeat, stage, commit, log, or copy access tokens, private keys, cloud credentials, proxy credentials, or other real secrets.
 - Treat `glm-acp-agent/`, `vcd/`, and comparable machine-local state as sensitive. `fish/`, `uv/`, `vcd/`, and `glm-acp-agent/` are local-only and must remain ignored. Verify ignore behavior with `git check-ignore` when changing related files.
+- `codex/` and all `auth.json` account files are local-only credentials and must remain ignored.
 - If a plaintext credential already exists, report its file scope without reproducing the value and recommend rotation. Do not duplicate it into a new configuration path without explicit user direction.
 - `zshrc-weave` status is pinned to `~/.config/zsh/weave/.status` and error logs to `~/.config/logs/`. Both are ignored from version control. Do not use `git add .`; stage only task files and commit or push only with explicit user approval.
 

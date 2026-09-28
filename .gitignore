@@ -26,5 +26,9 @@
 **/*.swp
 **/*.tmp
 **/*~
+# Codex account credentials are machine-local secrets.
+/codex/
+**/auth.json
+**/*.auth.json
 zsh/weave/.status
 zsh/weave/.sync-transaction*
