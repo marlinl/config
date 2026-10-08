@@ -8,6 +8,7 @@ source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 # 变量
 var HOMEBREW_OPT '/opt/homebrew/opt'
 var HOMEBREW_NO_AUTO_UPDATE 1
+var HOMEBREW_NO_ENV_HINTS 1
 var OS_ICON "%F{white}%f"
 var -f JAVA_HOME default_java_home
 
