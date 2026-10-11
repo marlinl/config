@@ -36,8 +36,8 @@ The repository is cloned to `~/.config` through SSH when that directory is missi
 
 ## Machine environment
 
-Keep machine-specific environment variables in `~/config/.env`, outside this
-repository at `~/.config`. This is a configuration file, not a Shell script:
+Keep machine-specific environment variables in `~/.config/.env`. This file is
+explicitly ignored by Git. It is a configuration file, not a Shell script:
 
 ```dotenv
 NO_PROXY="127.0.0.1"

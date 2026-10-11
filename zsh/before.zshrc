@@ -1,5 +1,5 @@
 # Parse machine defaults as configuration data before loading shared settings.
-if [[ -r "$HOME/config/.env" ]]; then
+if [[ -r "$HOME/.config/.env" ]]; then
     # Read single-line dotenv assignments without executing or expanding values.
     () {
         local _dotenv_line _dotenv_key _dotenv_value MATCH MBEGIN MEND
@@ -28,7 +28,7 @@ if [[ -r "$HOME/config/.env" ]]; then
                 _dotenv_value="${_dotenv_value%"${_dotenv_value##*[![:space:]]}"}"
             fi
             typeset -gx -- "$_dotenv_key=$_dotenv_value"
-        done < "$HOME/config/.env"
+        done < "$HOME/.config/.env"
     }
 fi
 

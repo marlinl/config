@@ -32,3 +32,6 @@
 **/*.auth.json
 zsh/weave/.status
 zsh/weave/.sync-transaction*
+
+# Machine-specific environment configuration.
+/.env
