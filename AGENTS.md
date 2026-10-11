@@ -18,6 +18,21 @@ The generated `~/.zshrc` has exactly three visible blocks, in this fixed order:
 2. `zsh/zshrc.macos` or `zsh/zshrc.debian`
 3. `zsh/after.zshrc`
 
+- **Mandatory: `.env` is configuration data, never a Shell script.** Parse
+  `~/config/.env` as single-line `KEY=value` assignments. Support whitespace
+  around `=`, empty values, single/double quotes, blank lines, and `#` comments
+  outside quotes. Double-quoted `\n` and `\r` represent line breaks. Values are
+  literal: do not expand variables, command substitutions, or Shell expressions;
+  do not interpret an `export` prefix or execute commands. Never load this file
+  with `source`, `.`, or `eval`, and never use `set -a`/`allexport` to load it.
+  Do not add Shell execution, option-preservation branches, new configuration
+  layers, or parser dependencies without explicit user authorization.
+- `zsh/before.zshrc` reads a readable `~/config/.env` at the start of the first
+  generated block and assigns parsed values to environment variables. Missing
+  files and invalid assignment lines are skipped. This file is outside the
+  `~/.config` repository and contains machine defaults; later plugin and Zsh
+  block assignments take precedence. Keep machine-specific values there and
+  never inline them into the generated blocks or tracked files.
 - Keep the block bodies faithful to their source configuration. Do not add generated headers, explanatory comments, hidden configuration variables, extra blocks, or platform-condition logic unless requested.
 - `zshrc-weave` uses the three visible `BEGIN`/`END` markers only as fixed boundaries. It watches only `~/.zshrc`; it does not watch, regenerate from, or react to changes under `zsh/` or `zsh-plugin/`.
 - `zsh-plugin/` remains a root-level collection of custom plugins. It is loaded by `zsh/before.zshrc` and is not a weave block or a weave watch target.

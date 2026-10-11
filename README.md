@@ -34,6 +34,25 @@ The repository is cloned to `~/.config` through SSH when that directory is missi
 - `zsh-plugin/`: custom Zsh plugins.
 - `ghostty/`: Ghostty configuration.
 
+## Machine environment
+
+Keep machine-specific environment variables in `~/config/.env`, outside this
+repository at `~/.config`. This is a configuration file, not a Shell script:
+
+```dotenv
+NO_PROXY="127.0.0.1"
+```
+
+`zsh/before.zshrc` parses single-line `KEY=value` assignments into environment
+variables before loading plugins and the remaining shared Zsh blocks. Later
+assignments override these machine defaults. Whitespace around `=`, empty
+values, single/double quotes, blank lines, and comments outside quotes are
+supported. Double-quoted `\n` and `\r` represent line breaks. Variables and
+command substitutions remain literal text; the file is never executed and
+does not use `export` statements. Missing files and invalid assignment lines
+are skipped. Edit this file directly for machine-specific values; weave does
+not embed it in the generated `~/.zshrc` or synchronize it into the repository.
+
 ## Codex accounts
 
 `zsh-plugin/codex-auth.zsh` is loaded by the shared Zsh startup block. It stores
