@@ -60,7 +60,7 @@ account files only in `~/.config/codex/` and switches `CODEX_HOME/auth.json`
 (`~/.codex/auth.json` by default) to a symlink to the selected file:
 
 ```zsh
-mycodex info             # Show the current account and available files
+mycodex info             # Show accounts and runtime directory links
 mycodex set marlinl      # Select an existing ~/.config/codex/marlinl.auth.json
 mycodex new aab          # Select a new account path for the next login
 mycodex delete aab       # Delete the named account file
@@ -68,6 +68,14 @@ mycodex codex -p marlinl # Run an independent CLI in this terminal as this accou
 mycodex codex resume <id> -p marlinl # Resume a session with this account
 mycodex --help           # Show all commands and their behavior
 ```
+
+`info` lists accounts in `~/.config/codex/` and the actual entries in each
+account's runtime directory: symlink targets, missing targets, and local files
+or directories. Accounts without a runtime directory are marked as uninitialized.
+It also shows the shared home used for launches and the `CODEX_SQLITE_HOME`
+directory, with a reminder that `sqlite_home` configuration takes precedence.
+The command reads paths and links without opening credential files or creating
+runtime directories.
 
 Sign in to Codex after `new`; the login creates the account file through the
 symlink. Switching accounts or deleting the active account stops matching
@@ -96,11 +104,10 @@ mycodex codex -p marlinl -- "A prompt containing -p literally"
 
 The native CLI runs with `--no-daemon` and file-based credentials, using the real
 directory `~/.config/codex/<account>/` as its `CODEX_HOME`. Its `auth.json` links to
-the selected account file, including native credential refresh writes. There is
-no Python bridge or wrapper-owned background server. Other options and commands
-follow native Codex behavior; `agents` and `--remote` are incompatible with
-`--no-daemon` (verified with Codex CLI 0.162.1). Explicitly invoking `app-server`
-still starts the native server command requested by the user.
+the selected account file, including native credential refresh writes. Other
+options and commands follow native Codex behavior; `agents` and `--remote` are
+incompatible with `--no-daemon`. Explicitly invoking `app-server` still starts
+the native server command requested by the user.
 
 Configuration, `.env`, AGENTS instructions, profiles, plugins, skills, sessions,
 archived sessions, history, and other existing data entries link back to the
@@ -120,11 +127,10 @@ shared entries are checked at every launch; a conflicting ordinary file or
 unexpected link stops the launch without overwriting it. Newly introduced Codex
 storage paths may require updating this layout, and a native command that
 replaces a file symlink rather than following it will be reported as a conflict
-on the next launch. Native config edits have been verified to preserve the link.
+on the next launch.
 
-Exit that account's CLI sessions before deleting its account file. Account home
-directories and records from the earlier `codex/cli/<account>/` implementation
-are retained without deletion or migration.
+Exit that account's CLI sessions before deleting its account file. Deleting an
+account leaves its home directory and session records in place.
 
 ## Workflow
 

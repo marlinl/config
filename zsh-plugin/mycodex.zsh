@@ -107,8 +107,8 @@ mycodex() {
             '用法: mycodex info | set <账户> | new <账户> | delete <账户> | codex [Codex 参数] -p <账户> | --help' \
             '' \
             '指令:' \
-            '  info          显示当前账户及可用的 auth 文件（包括旧目录中的文件）' \
-            '  set <账户>    切换到指定账户；首次选择时会将同名旧文件移入账户目录' \
+            '  info          显示当前账户、可用账户及运行目录关联' \
+            '  set <账户>    切换默认账户' \
             '  new <账户>    新建待登录账户的软链；登录 Codex 后生成 auth 文件' \
             '  delete <账户> 删除指定账户文件；若为当前账户，同时移除软链' \
             '  codex ... -p <账户>  使用指定账户运行 Codex，其余参数原样转发' \
@@ -116,19 +116,22 @@ mycodex() {
             '' \
             '账户名只允许字母、数字、下划线和短横线，且必须以字母或数字开头。' \
             '账户文件位于 ~/.config/codex/<账户>.auth.json。' \
-            '当前凭据入口位于 CODEX_HOME/auth.json（默认 ~/.codex/auth.json）。' \
+            '默认账户入口位于 CODEX_HOME/auth.json（默认 ~/.codex/auth.json）。' \
+            '' \
+            '运行 Codex:' \
             '示例: mycodex codex -p marlinl；mycodex codex resume <id> -p marlinl。' \
             '-p <账户> 可放在 Codex 参数前后；必须在 -- 之前且只能指定一次。' \
             'Codex 自身的配置 profile 请使用 --profile；-- 后的参数保持原样。' \
-            'codex 使用 ~/.config/codex/<账户>/ 作为独立 CODEX_HOME。' \
-            '配置、.env、插件、指令和记录通过软链接共享原 Codex 目录；显示路径可能不同。' \
-            '数据库沿用 CODEX_SQLITE_HOME（未设置时使用原 Codex 目录）；sqlite_home 配置优先。' \
-            '直接运行原生 codex --no-daemon，无 Python 桥接；退出不留下专属后台 server。' \
-            '其余参数遵循原生 Codex 规则；agents 和 --remote 与 --no-daemon 不兼容。' \
-            '支持 ChatGPT 和 API key 文件账户；认证环境覆盖被清空，其他环境及工作目录继承。' \
-            '遇到已有文件或链接冲突时停止，不覆盖；旧 codex/cli/ 目录保持原样。' \
+            '指定账户必须已有账户文件；可在不同终端同时运行，不改变默认账户。' \
+            '配置、插件和会话记录与原 Codex 目录共享。' \
+            '以 --no-daemon 模式运行；agents 和 --remote 与该模式不兼容。' \
+            '支持 ChatGPT 和 API key 文件账户；启动时清空认证环境覆盖。' \
+            '' \
+            '账户管理:' \
             'Codex 需使用文件型凭据存储（cli_auth_credentials_store = "file"）。' \
-            '切换未托管的 auth.json 前会询问并备份；改变当前账户后会停止 app-server。'
+            'set 可将 CODEX_HOME/<账户>.auth.json 导入账户目录。' \
+            '切换未托管的 auth.json 前会询问并备份；改变默认账户后会停止 app-server。' \
+            '删除账户前请先退出使用该账户的 CLI 会话。'
         return 0
     fi
 
@@ -194,21 +197,49 @@ mycodex() {
             fi
             print -- "账户文件: $store"
             local count=0
+            local -a accounts=()
             for file in "$store"/*.auth.json(N); do
                 if [[ -f "$file" && ! -L "$file" ]]; then
                     print -- "  ${file:t:r:r}"
+                    accounts+=("${file:t:r:r}")
                     (( count++ ))
                 fi
             done
             (( count )) || print -- '  (无)'
-            local -a legacy_files
-            legacy_files=("$codex_home"/*.auth.json(N))
-            if (( ${#legacy_files} )); then
-                print -- "旧位置账户文件: $codex_home"
-                for file in "${legacy_files[@]}"; do
-                    [[ -f "$file" && ! -L "$file" ]] && print -- "  ${file:t:r:r}"
+
+            print -r -- "共享目录（启动来源）: ${codex_home:A}"
+            print -r -- "数据库目录（CODEX_SQLITE_HOME）: ${CODEX_SQLITE_HOME:-${codex_home:A}}"
+            print -- '  若配置了 sqlite_home，以该配置为准。'
+            print -- '运行目录关联（现有条目）:'
+            local runtime_home entry link_target
+            for name in "${accounts[@]}"; do
+                runtime_home="$store/$name"
+                print -r -- "  $name: $runtime_home"
+                if [[ -L "$runtime_home" || ( -e "$runtime_home" && ! -d "$runtime_home" ) ]]; then
+                    print -- '    路径冲突：运行目录必须是普通目录'
+                    continue
+                elif [[ ! -d "$runtime_home" ]]; then
+                    print -- '    尚未初始化；首次运行 mycodex codex 时创建关联'
+                    continue
+                fi
+                local -a runtime_entries=("$runtime_home"/*(DN))
+                (( ${#runtime_entries} )) || print -- '    (空目录)'
+                for entry in "${runtime_entries[@]}"; do
+                    if [[ -L "$entry" ]]; then
+                        link_target="$(readlink "$entry")"
+                        if [[ -e "$entry" ]]; then
+                            print -r -- "    ${entry:t} -> $link_target"
+                        else
+                            print -r -- "    ${entry:t} -> $link_target (目标不存在)"
+                        fi
+                    elif [[ -d "$entry" ]]; then
+                        print -r -- "    ${entry:t}/ (账户本地目录)"
+                    else
+                        print -r -- "    ${entry:t} (账户本地文件)"
+                    fi
                 done
-            fi
+            done
+            (( ${#accounts} )) || print -- '  (无可用账户)'
             return 0
             ;;
         codex)
