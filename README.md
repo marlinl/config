@@ -144,8 +144,9 @@ or start background services.
 open shell, load it once with `source ~/.config/zsh-plugin/myconfig.zsh`.
 
 ```zsh
-myconfig render                          # Generate ~/.zshrc from the three source blocks
-myconfig render --output /tmp/zshrc-preview  # Generate a preview file
+myconfig render                          # Generate ~/.zshrc and reload the current shell
+myconfig render --print                  # Print the rendered configuration without applying it
+myconfig render --output /tmp/zshrc-preview  # Write a preview file without reloading
 myconfig check                           # Validate and report differences without writing
 myconfig sync                            # Validate, write back, commit, and push
 myconfig sync -m "Update Zsh prompt"       # Supply a commit message
@@ -153,8 +154,16 @@ myconfig sync -m "Update Zsh prompt"       # Supply a commit message
 
 `render` combines `before.zshrc`, the current platform's `zshrc.macos` or
 `zshrc.debian`, and `after.zshrc`. It asks before replacing an existing output
-and preserves that file or symlink in a timestamped backup. Rendering does not
-reload the current shell.
+and preserves that file or symlink in a timestamped backup. After a successful
+default render, it sources `~/.zshrc` in the calling shell so the new configuration
+takes effect immediately. Cancellation or failure does not reload the shell and
+returns a nonzero status.
+
+`render --print` writes only the validated configuration to stdout, without
+writing files in the configuration repository or reloading the shell; redirect
+it with `myconfig render --print > /tmp/zshrc` if needed. It refuses a pending
+write-back transaction rather than recovering it. `--output FILE` retains explicit
+file rendering with confirmation and backup, but does not reload the shell.
 
 `check` validates Zsh syntax, exactly three fixed blocks in order, and absence
 of content outside their boundaries. It reports differing source paths without

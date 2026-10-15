@@ -297,6 +297,7 @@ prepare_output_target() {
     fi
 }
 
+# Generate and validate the three blocks before replacing a file or printing a preview.
 render_locked() {
     local platform="$1"
     case "${ZSH_WEAVE_RECOVER:-1}" in
@@ -315,10 +316,13 @@ render_locked() {
             ;;
     esac
     load_platform_paths "$platform" || return 1
-    prepare_output_target || return 1
-
     local output_dir="${OUTPUT_FILE:h}"
-    local temp_file source_path
+    local temp_file source_path result
+    if [[ "$OUTPUT_FILE" == - ]]; then
+        output_dir="${TMPDIR:-/tmp}"
+    else
+        prepare_output_target || return 1
+    fi
     temp_file="$(command mktemp "$output_dir/.zshrc-weave.XXXXXX")" || return 1
 
     {
@@ -336,6 +340,13 @@ render_locked() {
         return 1
     fi
 
+    if [[ "$OUTPUT_FILE" == - ]]; then
+        command cat "$temp_file"
+        result=$?
+        command rm -f "$temp_file"
+        return "$result"
+    fi
+
     if ! command chmod 600 "$temp_file"; then
         command rm -f "$temp_file"
         fail "cannot protect rendered output: $OUTPUT_FILE"
@@ -349,8 +360,17 @@ render_locked() {
     write_status idle "$platform" 'rendered'
 }
 
+# Keep previews read-only; serialize file rendering and transaction recovery.
 render() {
     local platform lock_fd result=0
+    local CHECK_ONLY=0
+    if [[ "$OUTPUT_FILE" == - ]]; then
+        CHECK_ONLY=1
+        local ZSH_WEAVE_RECOVER=0
+        platform="$(resolve_platform "${1:-auto}")" || return 1
+        render_locked "$platform"
+        return $?
+    fi
     platform="$(resolve_platform "${1:-auto}")" || return 1
     acquire_sync_lock lock_fd || return 1
     cleanup_stale_transactions_locked || result=$?
