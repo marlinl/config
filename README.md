@@ -55,28 +55,76 @@ not embed it in the generated `~/.zshrc` or synchronize it into the repository.
 
 ## Codex accounts
 
-`zsh-plugin/codex-auth.zsh` is loaded by the shared Zsh startup block. It stores
+`zsh-plugin/mycodex.zsh` is loaded by the shared Zsh startup block. It stores
 account files only in `~/.config/codex/` and switches `CODEX_HOME/auth.json`
 (`~/.codex/auth.json` by default) to a symlink to the selected file:
 
 ```zsh
-codex-auth -l            # Show the current account and available files
-codex-auth -p marlinl    # Select an existing ~/.config/codex/marlinl.auth.json
-codex-auth --new aab     # Select a new account path for the next login
-codex-auth -d aab        # Delete the named account file
-codex-auth --help         # Show all commands and their behavior
+mycodex info             # Show the current account and available files
+mycodex set marlinl      # Select an existing ~/.config/codex/marlinl.auth.json
+mycodex new aab          # Select a new account path for the next login
+mycodex delete aab       # Delete the named account file
+mycodex codex -p marlinl # Run an independent CLI in this terminal as this account
+mycodex codex resume <id> -p marlinl # Resume a session with this account
+mycodex --help           # Show all commands and their behavior
 ```
 
-Sign in to Codex after `--new`; the login creates the account file through the
+Sign in to Codex after `new`; the login creates the account file through the
 symlink. Switching accounts or deleting the active account stops matching
 `codex app-server` processes owned by the current user; a Codex client starts
 a new one when needed. Restart a separately launched app-server yourself. If an
 existing `auth.json` is a regular file or points outside the account directory,
 the command asks before moving that entry to a timestamped backup. On first
-selection, `-p` moves a same-named `CODEX_HOME/*.auth.json` file into
+selection, `set` moves a same-named `CODEX_HOME/*.auth.json` file into
 `~/.config/codex/` with mode `600` if the target file does not exist. Set
 `cli_auth_credentials_store = "file"` in `CODEX_HOME/config.toml`; see the
 [Codex authentication documentation](https://learn.chatgpt.com/docs/auth).
+
+To use multiple accounts concurrently, run `mycodex codex -p marlinl` in one
+terminal tab and `mycodex codex -p aab` in another. An existing ordinary file at
+`~/.config/codex/<account>.auth.json` is required. The wrapper consumes exactly one
+`-p <account>` before `--`, anywhere among the Codex arguments, and forwards the
+remaining arguments unchanged. Use `--profile <name>` for Codex's own config
+profile. For example:
+
+```zsh
+mycodex codex resume <id> -p marlinl
+mycodex codex exec -p marlinl "Explain this repository"
+mycodex codex -p marlinl --profile work
+mycodex codex -p marlinl -- "A prompt containing -p literally"
+```
+
+The native CLI runs with `--no-daemon` and file-based credentials, using the real
+directory `~/.config/codex/<account>/` as its `CODEX_HOME`. Its `auth.json` links to
+the selected account file, including native credential refresh writes. There is
+no Python bridge or wrapper-owned background server. Other options and commands
+follow native Codex behavior; `agents` and `--remote` are incompatible with
+`--no-daemon` (verified with Codex CLI 0.162.1). Explicitly invoking `app-server`
+still starts the native server command requested by the user.
+
+Configuration, `.env`, AGENTS instructions, profiles, plugins, skills, sessions,
+archived sessions, history, and other existing data entries link back to the
+original Codex home (`CODEX_HOME` before invocation, or `~/.codex`). Shared data
+directories are created if missing. Codex reads `.env` itself; the plugin never
+sources it. The current working directory and other environment values are
+inherited; `OPENAI_API_KEY`, `CODEX_API_KEY`, and `CODEX_ACCESS_TOKEN` are cleared
+for this invocation so they cannot override the selected account. The original
+`auth.json` is not switched or rewritten. Paths displayed by `/status` can use
+the account directory even when they resolve to the same shared files.
+
+SQLite databases and their sidecars are not individually linked. The child
+inherits `CODEX_SQLITE_HOME`, or defaults it to the original Codex home; native
+`sqlite_home` configuration still takes precedence. App-server runtime state,
+IPC, temporary files, and process-manager state remain account-local. Existing
+shared entries are checked at every launch; a conflicting ordinary file or
+unexpected link stops the launch without overwriting it. Newly introduced Codex
+storage paths may require updating this layout, and a native command that
+replaces a file symlink rather than following it will be reported as a conflict
+on the next launch. Native config edits have been verified to preserve the link.
+
+Exit that account's CLI sessions before deleting its account file. Account home
+directories and records from the earlier `codex/cli/<account>/` implementation
+are retained without deletion or migration.
 
 ## Workflow
 
