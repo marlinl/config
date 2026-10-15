@@ -4,7 +4,7 @@
 
 This is a personal, cross-platform dotfiles repository for macOS and Debian. It is not an application service.
 
-- `setup.sh` is the only bootstrap entry point. When executed outside a checkout, it clones `git@github.com:marlinl/config.git` over SSH into a missing or empty `~/.config` and then runs the cloned script. It may reuse a non-empty target only when that target's `origin` matches the configured repository URL; otherwise it must refuse it. In normal mode it may install packages, change global Git settings, create `~/.zprofile` and `~/.vimrc` links, generate `~/.zshrc`, enable the user-level `zshrc-weave` service, and change the login shell to zsh when needed. A later normal run must check packages, links, generated Zsh configuration, service state, Git identity, and login shell first, and skip installation when all checks pass.
+- `setup.sh` is the only bootstrap entry point. When executed outside a checkout, it clones `git@github.com:marlinl/config.git` over SSH into a missing or empty `~/.config` and then runs the cloned script. It may reuse a non-empty target only when that target's `origin` matches the configured repository URL; otherwise it must refuse it. In normal mode it may install packages, change global Git settings, create `~/.zprofile` and `~/.vimrc` links, generate `~/.zshrc`, and change the login shell to zsh when needed. A later normal run must check packages, links, generated Zsh configuration, Git identity, and login shell first, and skip installation when all checks pass.
 - `./setup.sh --dry-run` and the remote `bash -c` invocation with `--dry-run` must print their plans without cloning, installing packages, changing files, changing Git configuration, enabling services, or changing the login shell.
 - `./setup.sh --test <directory>` is the safe rendering path. It writes `<directory>/.zshrc` plus only the fixed, ignored `~/.config/zsh/weave/.status` file; it must not install packages, create links below `~`, change Git configuration, enable services, or change the login shell.
 - The user owns all pre-existing modifications and untracked files. Start with `git status --short`; do not modify, stage, move, or delete unrelated work.
@@ -34,14 +34,16 @@ The generated `~/.zshrc` has exactly three visible blocks, in this fixed order:
   and Zsh block assignments take precedence. Never stage or commit it, and never
   inline machine-specific values into the generated blocks or tracked files.
 - Keep the block bodies faithful to their source configuration. Do not add generated headers, explanatory comments, hidden configuration variables, extra blocks, or platform-condition logic unless requested.
-- `zshrc-weave` uses the three visible `BEGIN`/`END` markers only as fixed boundaries. It watches only `~/.zshrc`; it does not watch, regenerate from, or react to changes under `zsh/` or `zsh-plugin/`.
-- `zsh-plugin/` remains a root-level collection of custom plugins. It is loaded by `zsh/before.zshrc` and is not a weave block or a weave watch target.
-- `zsh/weave/zshrc-weave.zsh` is the renderer, fixed-block synchronizer, daemon, and status command. Its only persistent log is error output at `~/.config/logs/zshrc-weave.error.log`; do not add trace, info, warning, or event logs.
-- A changed three-block write-back must first activate the fixed, ignored `zsh/weave/.sync-transaction` directory and then roll all source blocks forward from it. Normal `render`, `sync`, and daemon startup must recover a pending transaction before continuing; `setup.sh --test` must instead refuse a pending transaction without changing source blocks. Temporary/completed transaction directories are ignored and may be cleaned only while holding the `.status` advisory lock.
-- `zsh/weave/com.marlinl.zshrc-weave.plist` and `zsh/weave/zshrc-weave.service` are source templates for the macOS LaunchAgent and Debian systemd user service. They are not active until normal setup installs them. After activation, setup must verify the macOS LaunchAgent is registered or the Debian user service is enabled and active. If the destination service file already exists, setup must ask before replacing it; declining keeps it untouched and skips service activation and verification.
+- `myconfig` uses the three visible `BEGIN`/`END` markers only as fixed boundaries. It runs on demand and exits; do not add watchers, daemons, LaunchAgents, or systemd services.
+- `zsh-plugin/` remains a root-level collection of custom plugins. It is loaded by `zsh/before.zshrc` and is not a generated block or part of the three-block sync commit scope.
+- `zsh/weave/zshrc-weave.zsh` is the internal renderer, checker, and transactional fixed-block writer used by `myconfig` and setup. Its only persistent log is error output at `~/.config/logs/zshrc-weave.error.log`; do not add trace, info, warning, or event logs.
+- A changed three-block write-back must first activate the fixed, ignored `zsh/weave/.sync-transaction` directory and then roll all source blocks forward from it. Normal `render` and `sync` must recover a pending transaction before continuing; `check` and `setup.sh --test` must instead refuse a pending transaction without changing source blocks. Temporary/completed transaction directories are ignored and may be cleaned only while holding the `.status` advisory lock.
+- Setup must not install, enable, or verify weave services. Existing legacy service registrations require a one-time disable and backup migration; do not silently remove user service files.
 - Do not remove the legacy root-level Zsh files or rename user-defined plugin files unless the task explicitly authorizes that migration.
 
 ## Zsh plugin responsibilities
+
+- `zsh-plugin/myconfig.zsh` provides `myconfig render [--output FILE]`, `myconfig check`, and `myconfig sync [-m MESSAGE]`. Render confirms and backs up existing outputs. Check validates syntax and the fixed block layout and reports source differences without changing source files, Git state, persistent status, or logs. Sync validates before write-back, commits only the current platform's three source blocks, and pushes to the current branch's configured upstream. Preserve unrelated staged/unstaged work; refuse pre-staged block changes and outgoing commits touching other paths. Do not pull, rebase, or force-push. Retry failed pushes even when the next write-back has no changes.
 
 - `zsh-plugin/var.zsh` provides `var NAME VALUE`, `var -g`, and `var -l` variable assignment modes.
 - `zsh-plugin/jenv.zsh` is the repository's Java environment manager. Its public commands are `jenv list`, `add`, `rm`, `set`, and `info`; preserve their names and behavior.
@@ -73,12 +75,12 @@ The generated `~/.zshrc` has exactly three visible blocks, in this fixed order:
 - Treat `glm-acp-agent/`, `vcd/`, and comparable machine-local state as sensitive. `fish/`, `uv/`, `vcd/`, and `glm-acp-agent/` are local-only and must remain ignored. Verify ignore behavior with `git check-ignore` when changing related files.
 - `codex/` and all `auth.json` account files are local-only credentials and must remain ignored.
 - If a plaintext credential already exists, report its file scope without reproducing the value and recommend rotation. Do not duplicate it into a new configuration path without explicit user direction.
-- `zshrc-weave` status is pinned to `~/.config/zsh/weave/.status` and error logs to `~/.config/logs/`. Both are ignored from version control. Do not use `git add .`; stage only task files and commit or push only with explicit user approval.
+- `zshrc-weave` status is pinned to `~/.config/zsh/weave/.status` and error logs to `~/.config/logs/`. Both are ignored from version control. Do not use `git add .`; stage only task files and commit or push only with explicit user approval. An explicit user invocation of `myconfig sync` authorizes its documented three-block commit and push; implementation tests must use disposable repositories and local remotes.
 
 ## Verification
 
 - After changing `setup.sh`, run `bash -n setup.sh` and exercise `./setup.sh --test <temporary-directory>`. Never use normal setup as routine verification.
 - After changing Zsh files or the synchronizer, run `zsh -n` on every modified file and on a generated test `.zshrc`.
-- For weave changes, verify the generated output contains exactly the three fixed blocks and that a no-op `sync` reports `changed=0`.
+- For rendering/write-back changes, verify exactly three fixed blocks and a no-op internal `sync` reporting `changed=0`. Verify `check` rejects invalid syntax/boundaries without persistent writes. Test `myconfig sync` against a disposable local remote, including commit scope, staged-work preservation, and failed-push retry.
 - For a non-empty test directory, verify `n` leaves it untouched and `y` replaces only the generated `.zshrc` while preserving other files.
 - Run `git diff --check` before handoff and state what high-impact operations were intentionally not executed.

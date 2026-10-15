@@ -30,7 +30,7 @@ The repository is cloned to `~/.config` through SSH when that directory is missi
 
 ## Layout
 
-- `zsh/`: shared and platform-specific Zsh configuration, plus weave.
+- `zsh/`: shared and platform-specific Zsh configuration, plus the internal rendering engine.
 - `zsh-plugin/`: custom Zsh plugins.
 - `ghostty/`: Ghostty configuration.
 
@@ -50,7 +50,7 @@ values, single/double quotes, blank lines, and comments outside quotes are
 supported. Double-quoted `\n` and `\r` represent line breaks. Variables and
 command substitutions remain literal text; the file is never executed and
 does not use `export` statements. Missing files and invalid assignment lines
-are skipped. Edit this file directly for machine-specific values; weave does
+are skipped. Edit this file directly for machine-specific values; `myconfig` does
 not embed it in the generated `~/.zshrc` or synchronize it into the repository.
 
 ## Codex accounts
@@ -80,4 +80,53 @@ selection, `-p` moves a same-named `CODEX_HOME/*.auth.json` file into
 
 ## Workflow
 
-`setup.sh` installs platform packages, links `~/.zprofile`, generates `~/.zshrc`, installs and verifies the current platform's weave service, and changes the login shell to zsh when needed. On a later normal run it checks the installed packages, links, generated Zsh configuration, service, Git identity, and login shell first; when all checks pass, it skips installation. Weave combines the fixed Zsh blocks and writes edits from `~/.zshrc` back to their source blocks through a recoverable transaction.
+`setup.sh` installs platform packages, links `~/.zprofile` and `~/.vimrc`, generates
+`~/.zshrc`, and changes the login shell to zsh when needed. On a later normal run
+it checks packages, links, generated Zsh configuration, Git identity, and login
+shell first; when all checks pass, it skips installation. It does not install
+or start background services.
+
+`zsh-plugin/myconfig.zsh` is loaded by the existing plugin loader. In an already
+open shell, load it once with `source ~/.config/zsh-plugin/myconfig.zsh`.
+
+```zsh
+myconfig render                          # Generate ~/.zshrc from the three source blocks
+myconfig render --output /tmp/zshrc-preview  # Generate a preview file
+myconfig check                           # Validate and report differences without writing
+myconfig sync                            # Validate, write back, commit, and push
+myconfig sync -m "Update Zsh prompt"       # Supply a commit message
+```
+
+`render` combines `before.zshrc`, the current platform's `zshrc.macos` or
+`zshrc.debian`, and `after.zshrc`. It asks before replacing an existing output
+and preserves that file or symlink in a timestamped backup. Rendering does not
+reload the current shell.
+
+`check` validates Zsh syntax, exactly three fixed blocks in order, and absence
+of content outside their boundaries. It reports differing source paths without
+printing their contents. Differences are valid and return success; invalid
+configuration returns a nonzero status. It does not change source files, the
+Git index, persistent status, or logs. A pending write-back transaction is
+reported instead of being recovered by a read-only check.
+
+`sync` uses the same validation on a snapshot before writing blocks back through
+a recoverable transaction. It commits changes only to the current platform's
+three source blocks, preserving other staged and unstaged files. Existing staged
+changes in those blocks must be resolved first. The current branch must have an
+upstream; unpushed commits touching other files are refused. It pushes to that
+upstream without pulling, rebasing, or forcing. A failed commit leaves the
+write-back available to retry; a failed push retains the local commit, and a
+later `sync` retries the push even when no new content changed.
+
+There is no watcher or daemon. Editing `.zshrc` requires `myconfig sync` to save
+and publish it; editing source blocks requires `myconfig render` to regenerate
+it. Plugin files and `.env` are not part of the three-block commit scope.
+
+If an older installation enabled weave, disable its existing service once
+before using these commands. On macOS, run
+`launchctl bootout gui/$(id -u)/com.marlinl.zshrc-weave` and move
+`~/Library/LaunchAgents/com.marlinl.zshrc-weave.plist` to a backup filename. On
+Debian, run `systemctl --user disable --now zshrc-weave.service` and move
+`~/.config/systemd/user/zshrc-weave.service` to a backup filename, then run
+`systemctl --user daemon-reload`. Normal setup no longer manages these legacy
+service files.

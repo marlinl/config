@@ -11,6 +11,7 @@ REPO_SSH_URL="${CONFIG_REPO_SSH_URL:-$DEFAULT_REPO_SSH_URL}"
 CONFIG_TARGET_DIR="$HOME/.config"
 DRY_RUN=0
 
+# Describe bootstrap, dry-run, and isolated rendering modes.
 usage() {
     cat <<'EOF'
 Usage:
@@ -19,7 +20,7 @@ Usage:
   ./setup.sh --test <directory>
 
 Without arguments, install the platform dependencies, render ~/.zshrc, create
-the standard ~/.zprofile and ~/.vimrc links, enable and verify zshrc-weave,
+the standard ~/.zprofile and ~/.vimrc links,
 and change the login shell to zsh when needed.
 
 --dry-run prints the selected installation plan without changing
@@ -258,52 +259,7 @@ render_live_zshrc() {
     render_zshrc "$platform" "$output_file" "$adopt"
 }
 
-install_macos_service() {
-    local template="$CONFIG_DIR/zsh/weave/com.marlinl.zshrc-weave.plist"
-    local agent_dir="$HOME/Library/LaunchAgents"
-    local agent_file="$agent_dir/com.marlinl.zshrc-weave.plist"
-    local temporary_file
-
-    [[ -r "$template" ]] || die "missing weave service template: $template"
-    mkdir -p "$agent_dir"
-    if [[ -e "$agent_file" || -L "$agent_file" ]]; then
-        if ! confirm "$agent_file 已存在，是否覆盖 weave 服务？"; then
-            printf '保留已有 weave 服务文件，跳过 macOS 服务安装。\n'
-            return 0
-        fi
-    fi
-    temporary_file="$(mktemp "$agent_dir/.zshrc-weave.XXXXXX")"
-    sed "s|__HOME__|$HOME|g" "$template" > "$temporary_file"
-    mv "$temporary_file" "$agent_file"
-
-    launchctl bootout "gui/$UID/com.marlinl.zshrc-weave" 2>/dev/null || true
-    launchctl bootstrap "gui/$UID" "$agent_file"
-    launchctl print "gui/$UID/com.marlinl.zshrc-weave" >/dev/null 2>&1 \
-        || die 'zshrc-weave LaunchAgent was not registered'
-}
-
-install_debian_service() {
-    local unit_dir="$HOME/.config/systemd/user"
-    local unit_file="$unit_dir/zshrc-weave.service"
-
-    [[ -r "$CONFIG_DIR/zsh/weave/zshrc-weave.service" ]] \
-        || die "missing weave service template: $CONFIG_DIR/zsh/weave/zshrc-weave.service"
-    mkdir -p "$unit_dir"
-    if [[ -e "$unit_file" || -L "$unit_file" ]]; then
-        if ! confirm "$unit_file 已存在，是否覆盖 weave 服务？"; then
-            printf '保留已有 weave 服务文件，跳过 Debian 服务安装。\n'
-            return 0
-        fi
-    fi
-    cp "$CONFIG_DIR/zsh/weave/zshrc-weave.service" "$unit_file"
-    systemctl --user daemon-reload
-    systemctl --user enable --now zshrc-weave.service
-    systemctl --user is-enabled --quiet zshrc-weave.service \
-        || die 'zshrc-weave systemd user service was not enabled'
-    systemctl --user is-active --quiet zshrc-weave.service \
-        || die 'zshrc-weave systemd user service is not active'
-}
-
+# Print the installation plan without changing the machine.
 plan_install() {
     local platform="$1"
 
@@ -318,14 +274,9 @@ plan_install() {
     print_command ln -s "$CONFIG_DIR/.vimrc" "$HOME/.vimrc"
     printf '[dry-run] render ~/.zshrc from zsh/before.zshrc, zsh/zshrc.%s, and zsh/after.zshrc\n' "$platform"
 
-    if [[ "$platform" == macos ]]; then
-        printf '[dry-run] install, bootstrap, and verify ~/Library/LaunchAgents/com.marlinl.zshrc-weave.plist (prompt before replacing an existing file)\n'
-    else
-        printf '[dry-run] install, daemon-reload, enable, and verify ~/.config/systemd/user/zshrc-weave.service (prompt before replacing an existing file)\n'
-    fi
     printf '[dry-run] complete a missing global Git identity and configure defaults when user.name is unset\n'
     printf '[dry-run] keep the login shell when it is already zsh; otherwise change it to an accepted zsh path with chsh -s\n'
-    printf '[dry-run] on a normal rerun, check the existing packages, links, ~/.zshrc, service, Git identity, and login shell before making changes\n'
+    printf '[dry-run] on a normal rerun, check the existing packages, links, ~/.zshrc, Git identity, and login shell before making changes\n'
 }
 
 ensure_git_for_clone() {
@@ -527,40 +478,6 @@ check_zshrc() {
         || check_failure '~/.zshrc does not contain exactly the three expected blocks in order'
 }
 
-check_service() {
-    local platform="$1"
-    if [[ "$platform" == macos ]]; then
-        local template="$CONFIG_DIR/zsh/weave/com.marlinl.zshrc-weave.plist"
-        local agent_file="$HOME/Library/LaunchAgents/com.marlinl.zshrc-weave.plist"
-        [[ -f "$agent_file" ]] \
-            || check_failure "missing LaunchAgent file: $agent_file"
-        if [[ ! -r "$template" ]] \
-            || ! diff -q <(sed "s|__HOME__|$HOME|g" "$template") "$agent_file" >/dev/null 2>&1; then
-            check_failure 'LaunchAgent file does not match its repository template'
-        fi
-        if ! command -v launchctl >/dev/null 2>&1 \
-            || ! launchctl print "gui/$UID/com.marlinl.zshrc-weave" >/dev/null 2>&1; then
-            check_failure 'zshrc-weave LaunchAgent is not registered'
-        fi
-    else
-        local template="$CONFIG_DIR/zsh/weave/zshrc-weave.service"
-        local unit_file="$HOME/.config/systemd/user/zshrc-weave.service"
-        [[ -f "$unit_file" ]] \
-            || check_failure "missing systemd user service file: $unit_file"
-        if [[ ! -r "$template" ]] || ! cmp -s "$template" "$unit_file"; then
-            check_failure 'systemd user service file does not match its repository template'
-        fi
-        if ! command -v systemctl >/dev/null 2>&1 \
-            || ! systemctl --user is-enabled --quiet zshrc-weave.service; then
-            check_failure 'zshrc-weave systemd user service is not enabled'
-        fi
-        if ! command -v systemctl >/dev/null 2>&1 \
-            || ! systemctl --user is-active --quiet zshrc-weave.service; then
-            check_failure 'zshrc-weave systemd user service is not active'
-        fi
-    fi
-}
-
 check_git_identity() {
     local git_name git_email
     if ! command -v git >/dev/null 2>&1; then
@@ -582,6 +499,7 @@ check_login_shell() {
         || check_failure "login shell is not zsh: ${login_shell:-unknown}"
 }
 
+# Check packages, shell files, Git identity, and login shell before installation.
 check_installation() {
     local platform="$1"
 
@@ -597,7 +515,6 @@ check_installation() {
     if command -v zsh >/dev/null 2>&1; then
         check_zshrc "$platform"
     fi
-    check_service "$platform"
     check_git_identity
     check_login_shell "$platform"
     (( CHECK_FAILED == 0 ))
@@ -639,6 +556,7 @@ ensure_zsh_login_shell() {
     fi
 }
 
+# Install missing configuration and packages without registering background services.
 run_install() {
     local platform="$1"
 
@@ -663,12 +581,6 @@ run_install() {
     link_file "$CONFIG_DIR/zsh/zprofile" "$HOME/.zprofile"
     link_file "$CONFIG_DIR/.vimrc" "$HOME/.vimrc"
     render_live_zshrc "$platform"
-
-    if [[ "$platform" == macos ]]; then
-        install_macos_service
-    else
-        install_debian_service
-    fi
 
     init_git_info
     ensure_zsh_login_shell "$platform"

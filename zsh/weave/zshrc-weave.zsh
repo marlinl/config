@@ -14,17 +14,22 @@ STATUS_FILE="$WEAVE_DIR/.status"
 TRANSACTION_DIR="$WEAVE_DIR/.sync-transaction"
 LOG_DIR="${ZSH_WEAVE_LOG_DIR:-$CONFIG_ROOT/logs}"
 ERROR_LOG="$LOG_DIR/zshrc-weave.error.log"
-POLL_INTERVAL="${ZSH_WEAVE_POLL_INTERVAL:-1}"
 
 typeset -ga PLATFORM_PATHS
 
+# Describe the internal rendering and write-back entry points.
 usage() {
-    print 'Usage: zshrc-weave.zsh <render|sync|daemon|status> [macos|debian|auto]'
+    print 'Usage: zshrc-weave.zsh <render|check|sync> [macos|debian|auto]'
     print 'Environment: ZSH_WEAVE_CONFIG_DIR, ZSH_WEAVE_OUTPUT_FILE'
 }
 
+# Report failures; read-only checks do not create persistent logs.
 fail() {
     local message="$*"
+    if [[ "${CHECK_ONLY:-0}" == 1 ]]; then
+        print -u2 -- "zshrc-weave: $message"
+        return 1
+    fi
     command mkdir -p "$LOG_DIR" 2>/dev/null || true
     command chmod 700 "$LOG_DIR" 2>/dev/null || true
     print -r -- "$(now) ERROR ${message}" >> "$ERROR_LOG" 2>/dev/null || true
@@ -49,18 +54,6 @@ write_status() {
         print -r -- "detail=${detail}"
     } > "$STATUS_FILE"
     command chmod 600 "$STATUS_FILE" 2>/dev/null || true
-}
-
-file_hash() {
-    local target_file="$1"
-    [[ -f "$target_file" ]] || return 0
-    if (( $+commands[shasum] )); then
-        command shasum -a 256 "$target_file" | command awk '{print $1}'
-    elif (( $+commands[sha256sum] )); then
-        command sha256sum "$target_file" | command awk '{print $1}'
-    else
-        command cksum "$target_file" | command awk '{print $1 ":" $2}'
-    fi
 }
 
 file_mode() {
@@ -286,19 +279,6 @@ stage_transaction_locked() {
     fi
 }
 
-recover_pending_transaction() {
-    [[ -d "$TRANSACTION_DIR" ]] || return 0
-
-    local lock_fd result=0
-    acquire_sync_lock lock_fd || return 1
-    cleanup_stale_transactions_locked || result=$?
-    if (( result == 0 )); then
-        recover_transaction_locked || result=$?
-    fi
-    release_sync_lock "$lock_fd"
-    return "$result"
-}
-
 is_managed_output() {
     [[ -f "$OUTPUT_FILE" ]] && command grep -q '^# ===== BEGIN zsh/before\.zshrc =====$' "$OUTPUT_FILE"
 }
@@ -381,92 +361,124 @@ render() {
     return "$result"
 }
 
-sync_locked() {
-    local platform="$1"
-    recover_transaction_locked || return 1
+# Validate one immutable snapshot, extract its blocks, and identify changed sources.
+check_blocks() {
+    local platform="$1" workspace="$2"
     load_platform_paths "$platform" || return 1
     is_managed_output || {
         fail "not a managed output: $OUTPUT_FILE"
         return 1
     }
+    command cp "$OUTPUT_FILE" "$workspace/output" || return 1
+    if ! command zsh -f -n "$workspace/output" >/dev/null 2>&1; then
+        fail 'edited output has invalid Zsh syntax; source blocks were not changed'
+        return 1
+    fi
 
-    local workspace output_content expected_path begin_marker end_marker block_content
-    local -i block_index=0
-    workspace="$(command mktemp -d "${TMPDIR:-/tmp}/zshrc-weave.XXXXXX")" || return 1
+    local expected_markers actual_markers expected_path output_content
+    local begin_marker end_marker block_content source_file
+    local -i block_index cmp_status
+    expected_markers="$(for expected_path in "${PLATFORM_PATHS[@]}"; do
+        print -r -- "# ===== BEGIN $expected_path ====="
+        print -r -- "# ===== END $expected_path ====="
+    done)"
+    actual_markers="$(command grep -E '^# ===== (BEGIN|END) ' "$workspace/output")"
+    [[ "$actual_markers" == "$expected_markers" ]] || {
+        fail 'expected exactly three fixed blocks in the correct order'
+        return 1
+    }
 
-    IFS= read -r -d '' output_content < "$OUTPUT_FILE" || true
+    IFS= read -r -d '' output_content < "$workspace/output" || true
     for (( block_index = 1; block_index <= ${#PLATFORM_PATHS}; block_index++ )); do
         expected_path="${PLATFORM_PATHS[$block_index]}"
-
         if (( block_index > 1 )); then
             [[ "${output_content[1,1]}" == $'\n' ]] || {
-                command rm -rf "$workspace"
                 fail "missing separator before block: $expected_path"
                 return 1
             }
             output_content="${output_content[2,-1]}"
         fi
-
         begin_marker="# ===== BEGIN $expected_path ====="$'\n'
         [[ "$output_content" == "$begin_marker"* ]] || {
-            command rm -rf "$workspace"
             fail "expected block: $expected_path"
             return 1
         }
         output_content="${output_content[$(( ${#begin_marker} + 1 )),-1]}"
-
         end_marker="# ===== END $expected_path ====="$'\n'
         [[ "$output_content" == *"$end_marker"* ]] || {
-            command rm -rf "$workspace"
             fail "missing END marker for: $expected_path"
             return 1
         }
         block_content="${output_content%%"$end_marker"*}"
         output_content="${output_content#*"$end_marker"}"
-        print -rn -- "$block_content" > "$workspace/$block_index"
+        print -rn -- "$block_content" > "$workspace/$block_index" || return 1
+        if ! command zsh -f -n "$workspace/$block_index" >/dev/null 2>&1; then
+            fail "invalid Zsh syntax in block: $expected_path"
+            return 1
+        fi
     done
-
     [[ "$output_content" == $'\n' ]] || {
-        command rm -rf "$workspace"
         fail 'unmanaged content outside fixed blocks'
         return 1
     }
 
-    if ! command zsh -n "$OUTPUT_FILE"; then
-        command rm -rf "$workspace"
-        fail "edited output has invalid Zsh syntax; source blocks were not changed"
-        return 1
-    fi
-
-    local source_path source_file changed=0
-    local -i cmp_status
+    CHANGED_PATHS=()
     for (( block_index = 1; block_index <= ${#PLATFORM_PATHS}; block_index++ )); do
-        source_path="${PLATFORM_PATHS[$block_index]}"
-        source_file="$CONFIG_ROOT/$source_path"
+        expected_path="${PLATFORM_PATHS[$block_index]}"
+        source_file="$CONFIG_ROOT/$expected_path"
         command cmp -s "$workspace/$block_index" "$source_file"
         cmp_status=$?
         (( cmp_status == 0 )) && continue
-        if (( cmp_status != 1 )); then
-            command rm -rf "$workspace"
-            fail "cannot compare source block: $source_path"
+        (( cmp_status == 1 )) || {
+            fail "cannot compare source block: $expected_path"
             return 1
-        fi
-        changed=1
+        }
+        CHANGED_PATHS+=("$expected_path")
+        print -r -- "different: $expected_path"
     done
-
-    if (( changed == 1 )); then
-        if ! stage_transaction_locked "$workspace" "$platform"; then
-            command rm -rf "$workspace"
-            return 1
-        fi
-    fi
-    command rm -rf "$workspace"
-    if (( changed == 1 )); then
-        recover_transaction_locked || return 1
-    fi
-    write_status idle "$platform" "sync changed=$changed"
+    print -r -- "check passed; changed=${#CHANGED_PATHS}"
 }
 
+# Check syntax, boundaries, and differences without changing repository or status files.
+check() {
+    local CHECK_ONLY=1 platform workspace
+    local -a CHANGED_PATHS
+    platform="$(resolve_platform "${1:-auto}")" || return 1
+    [[ ! -e "$TRANSACTION_DIR" ]] || {
+        fail 'pending sync transaction; run render or sync to recover it first'
+        return 1
+    }
+    workspace="$(command mktemp -d "${TMPDIR:-/tmp}/zshrc-weave.XXXXXX")" || return 1
+    {
+        check_blocks "$platform" "$workspace"
+    } always {
+        command rm -rf "$workspace"
+    }
+}
+
+# Recover interrupted writes, check a snapshot, and write changed blocks transactionally.
+sync_locked() {
+    local platform="$1" workspace source_path
+    local -a CHANGED_PATHS
+    recover_transaction_locked || return 1
+    workspace="$(command mktemp -d "${TMPDIR:-/tmp}/zshrc-weave.XXXXXX")" || return 1
+    {
+        check_blocks "$platform" "$workspace" || return 1
+        if (( ${#CHANGED_PATHS} )); then
+            stage_transaction_locked "$workspace" "$platform" || return 1
+            recover_transaction_locked || return 1
+        fi
+        for source_path in "${CHANGED_PATHS[@]}"; do
+            print -r -- "updated=$source_path"
+        done
+        write_status idle "$platform" "sync changed=${#CHANGED_PATHS}" || return 1
+        print -r -- "sync changed=${#CHANGED_PATHS}"
+    } always {
+        command rm -rf "$workspace"
+    }
+}
+
+# Serialize write-back and recovery through the existing fixed advisory lock.
 sync() {
     local platform lock_fd result=0
     platform="$(resolve_platform "${1:-auto}")" || return 1
@@ -479,72 +491,9 @@ sync() {
     return "$result"
 }
 
-daemon() {
-    local platform
-    platform="$(resolve_platform "${1:-auto}")" || return 1
-
-    if [[ ! -e "$OUTPUT_FILE" ]]; then
-        fail "cannot watch a missing output: $OUTPUT_FILE"
-        write_status error "$platform" 'missing output'
-        return 1
-    elif ! is_managed_output; then
-        fail "cannot watch unmanaged output: $OUTPUT_FILE"
-        write_status error "$platform" 'unmanaged output'
-        return 1
-    fi
-
-    if ! recover_pending_transaction; then
-        write_status error "$platform" 'pending transaction recovery failed'
-        return 1
-    fi
-    write_status watching "$platform" "output=$OUTPUT_FILE"
-
-    local last_output output_hash
-    last_output="$(file_hash "$OUTPUT_FILE")"
-
-    while true; do
-        command sleep "$POLL_INTERVAL"
-        if [[ -d "$TRANSACTION_DIR" ]] && ! recover_pending_transaction; then
-            write_status error "$platform" 'pending transaction recovery failed'
-            continue
-        fi
-        output_hash="$(file_hash "$OUTPUT_FILE")"
-
-        if [[ "$output_hash" != "$last_output" ]]; then
-            if sync "$platform"; then
-                :
-            else
-                write_status error "$platform" 'output sync rejected'
-            fi
-        fi
-
-        last_output="$output_hash"
-    done
-}
-
-status() {
-    if [[ -r "$STATUS_FILE" ]]; then
-        command cat "$STATUS_FILE"
-    else
-        print 'state=stopped'
-    fi
-}
-
 case "${1:-}" in
-    render)
-        render "${2:-auto}"
-        ;;
-    sync)
-        sync "${2:-auto}"
-        ;;
-    daemon)
-        daemon "${2:-auto}"
-        ;;
-    status)
-        status
-        ;;
-    *)
-        usage
-        exit 64
-        ;;
+    render) render "${2:-auto}" ;;
+    check) check "${2:-auto}" ;;
+    sync) sync "${2:-auto}" ;;
+    *) usage; exit 64 ;;
 esac
