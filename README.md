@@ -64,8 +64,8 @@ mycodex info             # Show accounts and runtime directory links
 mycodex set marlinl      # Select an existing ~/.config/codex/marlinl.auth.json
 mycodex new aab          # Select a new account path for the next login
 mycodex delete aab       # Delete the named account file
-mycodex codex -p marlinl # Run an independent CLI in this terminal as this account
-mycodex codex resume <id> -p marlinl # Resume a session with this account
+mycodex codex -auth marlinl # Run an independent CLI in this terminal as this account
+mycodex codex resume <id> -auth marlinl # Resume a session with this account
 mycodex --help           # Show all commands and their behavior
 ```
 
@@ -88,18 +88,18 @@ selection, `set` moves a same-named `CODEX_HOME/*.auth.json` file into
 `cli_auth_credentials_store = "file"` in `CODEX_HOME/config.toml`; see the
 [Codex authentication documentation](https://learn.chatgpt.com/docs/auth).
 
-To use multiple accounts concurrently, run `mycodex codex -p marlinl` in one
-terminal tab and `mycodex codex -p aab` in another. An existing ordinary file at
+To use multiple accounts concurrently, run `mycodex codex -auth marlinl` in one
+terminal tab and `mycodex codex -auth aab` in another. An existing ordinary file at
 `~/.config/codex/<account>.auth.json` is required. The wrapper consumes exactly one
-`-p <account>` before `--`, anywhere among the Codex arguments, and forwards the
-remaining arguments unchanged. Use `--profile <name>` for Codex's own config
+`-auth <account>` before `--`, anywhere among the Codex arguments, and forwards the
+remaining arguments unchanged. Use `-p <name>` or `--profile <name>` for Codex's own config
 profile. For example:
 
 ```zsh
-mycodex codex resume <id> -p marlinl
-mycodex codex exec -p marlinl "Explain this repository"
-mycodex codex -p marlinl --profile work
-mycodex codex -p marlinl -- "A prompt containing -p literally"
+mycodex codex resume <id> -auth marlinl
+mycodex codex exec -auth marlinl "Explain this repository"
+mycodex codex -auth marlinl --profile work
+mycodex codex -auth marlinl -- "A prompt containing -auth literally"
 ```
 
 The native CLI runs with `--no-daemon` and file-based credentials, using the real

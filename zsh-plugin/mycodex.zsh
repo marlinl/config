@@ -104,14 +104,14 @@ mycodex() {
             return 2
         fi
         print -r -l -- \
-            '用法: mycodex info | set <账户> | new <账户> | delete <账户> | codex [Codex 参数] -p <账户> | --help' \
+            '用法: mycodex info | set <账户> | new <账户> | delete <账户> | codex [Codex 参数] -auth <账户> | --help' \
             '' \
             '指令:' \
             '  info          显示当前账户、可用账户及运行目录关联' \
             '  set <账户>    切换默认账户' \
             '  new <账户>    新建待登录账户的软链；登录 Codex 后生成 auth 文件' \
             '  delete <账户> 删除指定账户文件；若为当前账户，同时移除软链' \
-            '  codex ... -p <账户>  使用指定账户运行 Codex，其余参数原样转发' \
+            '  codex ... -auth <账户>  使用指定账户运行 Codex，其余参数原样转发' \
             '  --help        显示本说明' \
             '' \
             '账户名只允许字母、数字、下划线和短横线，且必须以字母或数字开头。' \
@@ -119,9 +119,9 @@ mycodex() {
             '默认账户入口位于 CODEX_HOME/auth.json（默认 ~/.codex/auth.json）。' \
             '' \
             '运行 Codex:' \
-            '示例: mycodex codex -p marlinl；mycodex codex resume <id> -p marlinl。' \
-            '-p <账户> 可放在 Codex 参数前后；必须在 -- 之前且只能指定一次。' \
-            'Codex 自身的配置 profile 请使用 --profile；-- 后的参数保持原样。' \
+            '示例: mycodex codex -auth marlinl；mycodex codex resume <id> -auth marlinl。' \
+            '-auth <账户> 可放在 Codex 参数前后；必须在 -- 之前且只能指定一次。' \
+            'Codex 自身的配置 profile 可使用 -p 或 --profile；-- 后的参数保持原样。' \
             '指定账户必须已有账户文件；可在不同终端同时运行，不改变默认账户。' \
             '配置、插件和会话记录与原 Codex 目录共享。' \
             '以 --no-daemon 模式运行；agents 和 --remote 与该模式不兼容。' \
@@ -140,9 +140,9 @@ mycodex() {
         shift
         while (( $# )); do
             case "$1" in
-                -p)
+                -auth)
                     if [[ -n "$name" ]] || (( $# < 2 )) || [[ ! "$2" =~ '^[A-Za-z0-9][A-Za-z0-9_-]*$' ]]; then
-                        print -u2 -- '用法: mycodex codex [Codex 参数] -p <账户>；账户必须合法且只能指定一次。'
+                        print -u2 -- '用法: mycodex codex [Codex 参数] -auth <账户>；账户必须合法且只能指定一次。'
                         return 2
                     fi
                     name="$2"
@@ -159,11 +159,11 @@ mycodex() {
             esac
         done
         if [[ -z "$name" ]]; then
-            print -u2 -- '用法: mycodex codex [Codex 参数] -p <账户>；-p 必须在 -- 之前。'
+            print -u2 -- '用法: mycodex codex [Codex 参数] -auth <账户>；-auth 必须在 -- 之前。'
             return 2
         fi
     elif (( $# == 0 )) || (( $# > 2 )); then
-        print -u2 -- '用法: mycodex info | set <账户> | new <账户> | delete <账户> | codex [Codex 参数] -p <账户> | --help'
+        print -u2 -- '用法: mycodex info | set <账户> | new <账户> | delete <账户> | codex [Codex 参数] -auth <账户> | --help'
         return 2
     fi
 
@@ -251,7 +251,7 @@ mycodex() {
             fi
             ;;
         *)
-            print -u2 -- '用法: mycodex info | set <账户> | new <账户> | delete <账户> | codex [Codex 参数] -p <账户> | --help'
+            print -u2 -- '用法: mycodex info | set <账户> | new <账户> | delete <账户> | codex [Codex 参数] -auth <账户> | --help'
             return 2
             ;;
     esac
