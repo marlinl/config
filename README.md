@@ -53,6 +53,24 @@ does not use `export` statements. Missing files and invalid assignment lines
 are skipped. Edit this file directly for machine-specific values; `myconfig` does
 not embed it in the generated `~/.zshrc` or synchronize it into the repository.
 
+## Orb agy
+
+`zsh-plugin/myagy.zsh` is loaded automatically by the shared Zsh startup block.
+For an already open shell, load it once:
+
+```zsh
+source ~/.config/zsh-plugin/myagy.zsh
+cd ~/Project/my-project
+myagy
+```
+
+`myagy` connects with `ssh -t agy`, enters `/mnt/mac` followed by the current
+host directory's resolved absolute path, and runs `agy` only if that directory
+change succeeds. It requires the SSH alias `agy`, Orb's `/mnt/mac` host mount,
+and an `agy` command available in the remote shell. Paths containing spaces or
+quotes are preserved. `myagy --help` prints usage; other arguments are rejected.
+Exiting the remote command returns to the unchanged local directory.
+
 ## Codex accounts
 
 `zsh-plugin/mycodex.zsh` is loaded by the shared Zsh startup block. It stores
