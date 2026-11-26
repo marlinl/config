@@ -62,13 +62,18 @@ For an already open shell, load it once:
 source ~/.config/zsh-plugin/myagy.zsh
 cd ~/Project/my-project
 myagy
+myagy --continue
+myagy --conversation=7766ba2b-e739-4845-a43b-cfa124cfe6d1
 ```
 
 `myagy` connects with `ssh -t agy`, enters `/mnt/mac` followed by the current
 host directory's resolved absolute path, and runs `agy` only if that directory
 change succeeds. It requires the SSH alias `agy`, Orb's `/mnt/mac` host mount,
 and an `agy` command available in the remote shell. Paths containing spaces or
-quotes are preserved. `myagy --help` prints usage; other arguments are rejected.
+quotes are preserved. `myagy --help` or `myagy -h` alone prints local usage;
+all other arguments are forwarded unchanged to remote `agy`, including empty
+arguments, `--name=value`, and separate option values. Quote arguments in your
+local shell as usual, for example `myagy -i "Explain this project"`.
 Exiting the remote command returns to the unchanged local directory.
 
 ## Codex accounts
